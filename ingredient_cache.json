@@ -1,0 +1,314 @@
+{
+  "1/2 teaspoons Better Than Bouillon roasted chicken or vegetable base": {
+    "category": "pantry",
+    "swedish_name": "buljong"
+  },
+  "Chili crisp": {
+    "category": "condiment",
+    "swedish_name": "chili crisp"
+  },
+  "Cilantro and/or green onion": {
+    "category": "produce",
+    "swedish_name": "koriander"
+  },
+  "Citron": {
+    "category": "produce",
+    "swedish_name": "citron"
+  },
+  "Finely sliced cucumbers": {
+    "category": "produce",
+    "swedish_name": "gurka"
+  },
+  "Granatäpple": {
+    "category": "produce",
+    "swedish_name": "granatäpple"
+  },
+  "Nymald svartpeppar": {
+    "category": "spice",
+    "swedish_name": "nymald svartpeppar"
+  },
+  "Olivolja": {
+    "category": "pantry",
+    "swedish_name": "olivolja"
+  },
+  "Olja": {
+    "category": "pantry",
+    "swedish_name": "olja"
+  },
+  "Olja att steka i": {
+    "category": "pantry",
+    "swedish_name": "olja"
+  },
+  "Salt & nymald svartpeppar": {
+    "category": "spice",
+    "swedish_name": "salt & nymald svartpeppar"
+  },
+  "Salt & peppar": {
+    "category": "spice",
+    "swedish_name": "salt och peppar"
+  },
+  "Salt & svartpeppar": {
+    "category": "spice",
+    "swedish_name": "salt och svartpeppar"
+  },
+  "Sötpotatis": {
+    "category": "produce",
+    "swedish_name": "sötpotatis"
+  },
+  "bakpulver": {
+    "category": "pantry",
+    "swedish_name": "bakpulver"
+  },
+  "blomkålshuvud á ca 600 g": {
+    "category": "produce",
+    "swedish_name": "blomkål"
+  },
+  "brown sugar": {
+    "category": "pantry",
+    "swedish_name": "brunt socker"
+  },
+  "chili eller sambal oelek": {
+    "category": "spice",
+    "swedish_name": "chili"
+  },
+  "chili powder": {
+    "category": "spice",
+    "swedish_name": "chilipulver"
+  },
+  "chipotle": {
+    "category": "spice",
+    "swedish_name": "chipotle"
+  },
+  "citron, saft och skal": {
+    "category": "produce",
+    "swedish_name": "citron"
+  },
+  "citron, saften": {
+    "category": "produce",
+    "swedish_name": "citron"
+  },
+  "cumin": {
+    "category": "spice",
+    "swedish_name": "spiskummin"
+  },
+  "eggs": {
+    "category": "protein",
+    "swedish_name": "ägg"
+  },
+  "extra firm tofu": {
+    "category": "protein",
+    "swedish_name": "tofu"
+  },
+  "full fat coconut milk": {
+    "category": "dairy",
+    "swedish_name": "kokosmjölk"
+  },
+  "garlic": {
+    "category": "produce",
+    "swedish_name": "vitlök"
+  },
+  "garlic cloves,": {
+    "category": "produce",
+    "swedish_name": "vitlök"
+  },
+  "grön chili": {
+    "category": "produce",
+    "swedish_name": "grön chili"
+  },
+  "grönkål": {
+    "category": "produce",
+    "swedish_name": "grönkål"
+  },
+  "gul lök": {
+    "category": "produce",
+    "swedish_name": "gul lök"
+  },
+  "honung": {
+    "category": "pantry",
+    "swedish_name": "honung"
+  },
+  "jäst": {
+    "category": "pantry",
+    "swedish_name": "jäst"
+  },
+  "kakao": {
+    "category": "pantry",
+    "swedish_name": "kakao"
+  },
+  "kikärtor": {
+    "category": "protein",
+    "swedish_name": "kikärtor"
+  },
+  "kokta linser": {
+    "category": "produce",
+    "swedish_name": "linser"
+  },
+  "koriander, fryst": {
+    "category": "produce",
+    "swedish_name": "koriander"
+  },
+  "krossade tomater": {
+    "category": "pantry",
+    "swedish_name": "krossade tomater"
+  },
+  "lime, saften": {
+    "category": "produce",
+    "swedish_name": "lime"
+  },
+  "majs, fryst": {
+    "category": "frozen",
+    "swedish_name": "majs"
+  },
+  "medium onion,": {
+    "category": "produce",
+    "swedish_name": "lök"
+  },
+  "olive oil": {
+    "category": "pantry",
+    "swedish_name": "olivolja"
+  },
+  "olja": {
+    "category": "pantry",
+    "swedish_name": "olja"
+  },
+  "paprika": {
+    "category": "produce",
+    "swedish_name": "paprika"
+  },
+  "peanut butter": {
+    "category": "condiment",
+    "swedish_name": "jordnötssmör"
+  },
+  "persilja, fryst": {
+    "category": "produce",
+    "swedish_name": "persilja"
+  },
+  "raps- eller olivolja": {
+    "category": "pantry",
+    "swedish_name": "rapsolja"
+  },
+  "red bell pepper,": {
+    "category": "produce",
+    "swedish_name": "röd paprika"
+  },
+  "red curry paste or roasted red chili paste": {
+    "category": "condiment",
+    "swedish_name": "röd currypasta"
+  },
+  "reduced sodium soy sauce": {
+    "category": "condiment",
+    "swedish_name": "soja"
+  },
+  "rödlök": {
+    "category": "produce",
+    "swedish_name": "rödlök"
+  },
+  "rökt paprikapulver": {
+    "category": "spice",
+    "swedish_name": "paprikapulver"
+  },
+  "salt": {
+    "category": "spice",
+    "swedish_name": "salt"
+  },
+  "salt and pepper,": {
+    "category": "spice",
+    "swedish_name": "salt och peppar"
+  },
+  "skvätt olivolja": {
+    "category": "pantry",
+    "swedish_name": "olja"
+  },
+  "smakrik ost, riven": {
+    "category": "dairy",
+    "swedish_name": "ost"
+  },
+  "small bunch fresh cilantro,": {
+    "category": "produce",
+    "swedish_name": "koriander"
+  },
+  "small bunch fresh parsley,": {
+    "category": "produce",
+    "swedish_name": "persilja"
+  },
+  "spiskummin": {
+    "category": "spice",
+    "swedish_name": "spiskummin"
+  },
+  "stora salladsblad": {
+    "category": "produce",
+    "swedish_name": "salladsblad"
+  },
+  "stora vita bönor, kokta": {
+    "category": "protein",
+    "swedish_name": "vita bönor"
+  },
+  "teriyaki": {
+    "category": "condiment",
+    "swedish_name": "teriyaki"
+  },
+  "torkade bönor som du själv blötlägger och kokar i förväg": {
+    "category": "pantry",
+    "swedish_name": "torkade bönor"
+  },
+  "torkade vita bönor som du blötlägger och kokar själv i förväg": {
+    "category": "pantry",
+    "swedish_name": "torkade vita bönor"
+  },
+  "uncooked ramen noodles": {
+    "category": "pantry",
+    "swedish_name": "ramen nudlar"
+  },
+  "valfria bönor, kokta": {
+    "category": "protein",
+    "swedish_name": "bönor"
+  },
+  "vatten": {
+    "category": "pantry",
+    "swedish_name": "vatten"
+  },
+  "vatten, fingervarmt": {
+    "category": "pantry",
+    "swedish_name": "vatten"
+  },
+  "vetemjöl": {
+    "category": "pantry",
+    "swedish_name": "vetemjöl"
+  },
+  "vinäger": {
+    "category": "pantry",
+    "swedish_name": "vinäger"
+  },
+  "vit tahini": {
+    "category": "condiment",
+    "swedish_name": "tahini"
+  },
+  "vitlök": {
+    "category": "produce",
+    "swedish_name": "vitlök"
+  },
+  "vitlöksklyfta": {
+    "category": "produce",
+    "swedish_name": "vitlök"
+  },
+  "vitlöksklyftor": {
+    "category": "produce",
+    "swedish_name": "vitlök"
+  },
+  "water": {
+    "category": "pantry",
+    "swedish_name": "vatten"
+  },
+  "white miso": {
+    "category": "condiment",
+    "swedish_name": "miso"
+  },
+  "whole peeled tomatoes": {
+    "category": "pantry",
+    "swedish_name": "hela skalade tomater"
+  },
+  "Äppelcidervinäger": {
+    "category": "condiment",
+    "swedish_name": "äppelcidervinäger"
+  }
+}
