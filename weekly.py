@@ -722,9 +722,12 @@ def ica_add_item(token: str, list_id: str, text: str) -> bool:
         return False
 
 
-def ica_delete_item(token: str, row_id: str) -> bool:
+def ica_delete_rows(token: str, list_id: str, row_ids: list) -> bool:
+    """Bulk-delete rows from an ICA list."""
+    payload = json.dumps(row_ids).encode()
     req = urllib.request.Request(
-        f"{ICA_API_BASE}/row/{row_id}",
+        f"{ICA_API_BASE}/list/{list_id}/rows",
+        data=payload,
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json; charset=UTF-8",
@@ -736,7 +739,7 @@ def ica_delete_item(token: str, row_id: str) -> bool:
         with urllib.request.urlopen(req) as resp:
             return resp.status in (200, 204)
     except urllib.error.HTTPError as e:
-        print(f"  DELETE FAILED ({e.code}): {row_id}")
+        print(f"  DELETE FAILED ({e.code})")
         return False
 
 
@@ -784,9 +787,8 @@ def ica_clear_list(token: str, session_id: str, list_id: str, only_checked: bool
 
     label = "checked" if only_checked else "all"
     print(f"  Clearing {len(to_delete)} {label} items...")
-    for row in to_delete:
-        ica_delete_item(token, row["id"])
-        time.sleep(0.1)
+    row_ids = [row["id"] for row in to_delete]
+    ica_delete_rows(token, list_id, row_ids)
     print(f"  Cleared.")
 
 
