@@ -361,7 +361,9 @@ def build_html(sections: list[dict], port: int) -> str:
     .item.checked .name {{ text-decoration: line-through; }}
     .item input[type="checkbox"] {{ width: 20px; height: 20px; accent-color: #4caf50; flex-shrink: 0; cursor: pointer; }}
     .name {{ flex: 1; font-size: 0.95rem; }}
-    .qty {{ color: #666; font-size: 0.85rem; white-space: nowrap; }}
+    .qty {{ color: #666; font-size: 0.85rem; white-space: nowrap; cursor: text; }}
+    .qty-input {{ width: 80px; padding: 2px 6px; border: 1px solid #4caf50; border-radius: 4px; font-size: 0.85rem; color: #333; outline: none; text-align: right; }}
+    .qty-edited {{ color: #e65100; font-weight: 600; }}
     .recipes {{ color: #999; font-size: 0.75rem; font-style: italic; margin-left: 4px; }}
     .actions {{ position: sticky; bottom: 0; background: #f5f5f5; padding: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; }}
     button {{ padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-weight: 500; }}
@@ -373,6 +375,13 @@ def build_html(sections: list[dict], port: int) -> str:
     .section-toggle {{ display: flex; justify-content: space-between; align-items: center; }}
     .check-all {{ font-size: 0.75rem; color: #4caf50; padding: 2px 8px; border-radius: 4px; background: #e8f5e9; cursor: pointer; }}
     .check-all:hover {{ background: #c8e6c9; }}
+    .add-bar {{ display: flex; gap: 8px; margin-bottom: 16px; }}
+    .add-bar input {{ flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; background: white; }}
+    .add-bar input::placeholder {{ color: #aaa; }}
+    .add-bar button {{ padding: 10px 16px; border: none; border-radius: 8px; background: #4caf50; color: white; font-size: 0.95rem; cursor: pointer; white-space: nowrap; }}
+    .add-bar button:hover {{ background: #43a047; }}
+    .custom-remove {{ color: #ccc; font-size: 0.8rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; }}
+    .custom-remove:hover {{ color: #e53935; background: #fce4ec; }}
     .toast {{ position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 24px; border-radius: 8px; display: none; z-index: 10; }}
     .toast.show {{ display: block; }}
   </style>
@@ -380,6 +389,10 @@ def build_html(sections: list[dict], port: int) -> str:
 <body>
   <h1>Inköpslista</h1>
   <p class="subtitle">Bocka av det du redan har hemma. Resten blir din inköpslista.</p>
+  <div class="add-bar">
+    <input type="text" id="addInput" placeholder="Lägg till vara..." autocomplete="off">
+    <button onclick="addCustomItem()">Lägg till</button>
+  </div>
   <div id="list"></div>
   <div class="counter" id="counter"></div>
   <div class="actions">
@@ -393,6 +406,41 @@ const DATA = {data_json};
 const SAVE_URL = "{save_url}";
 
 let checked = JSON.parse(localStorage.getItem('grocery-checked') || '{{}}');
+let customItems = JSON.parse(localStorage.getItem('grocery-custom') || '[]');
+let adjustedQty = JSON.parse(localStorage.getItem('grocery-adjusted-qty') || '{{}}');
+
+function saveAdjusted() {{
+  localStorage.setItem('grocery-adjusted-qty', JSON.stringify(adjustedQty));
+}}
+
+function saveCustom() {{
+  localStorage.setItem('grocery-custom', JSON.stringify(customItems));
+}}
+
+function addCustomItem() {{
+  const input = document.getElementById('addInput');
+  const name = input.value.trim();
+  if (!name) return;
+  const id = 'custom_' + name.toLowerCase().replace(/[^a-zåäö0-9]/g, '_');
+  if (!customItems.find(i => i.id === id)) {{
+    customItems.push({{ id, name }});
+    saveCustom();
+  }}
+  input.value = '';
+  render();
+}}
+
+function removeCustomItem(id) {{
+  customItems = customItems.filter(i => i.id !== id);
+  delete checked[id];
+  saveCustom(); save(); render();
+}}
+
+document.addEventListener('DOMContentLoaded', () => {{
+  document.getElementById('addInput').addEventListener('keydown', (e) => {{
+    if (e.key === 'Enter') addCustomItem();
+  }});
+}});
 
 function showToast(msg, ms = 2000) {{
   const t = document.getElementById('toast');
@@ -406,7 +454,12 @@ function render() {{
   list.innerHTML = '';
   let totalItems = 0, checkedItems = 0;
 
-  for (const section of DATA) {{
+  const allSections = [...DATA];
+  if (customItems.length > 0) {{
+    allSections.push({{ section: 'Övrigt', items: customItems.map(i => ({{ ...i, qty: '', recipes: '', custom: true }})) }});
+  }}
+
+  for (const section of allSections) {{
     const sectionEl = document.createElement('div');
     const allChecked = section.items.every(i => checked[i.id]);
 
@@ -427,21 +480,54 @@ function render() {{
       if (checked[item.id]) checkedItems++;
       const div = document.createElement('div');
       div.className = 'item' + (checked[item.id] ? ' checked' : '');
+      const displayQty = adjustedQty[item.id] !== undefined ? adjustedQty[item.id] : (item.qty || '');
+      const isEdited = adjustedQty[item.id] !== undefined && adjustedQty[item.id] !== item.qty;
       div.innerHTML = `
         <input type="checkbox" ${{checked[item.id] ? 'checked' : ''}}>
         <span class="name">${{item.name}}</span>
-        ${{item.qty ? `<span class="qty">${{item.qty}}</span>` : ''}}
-        <span class="recipes">${{item.recipes}}</span>
+        ${{item.qty || adjustedQty[item.id] ? `<span class="qty${{isEdited ? ' qty-edited' : ''}}">${{displayQty}}</span>` : ''}}
+        ${{item.recipes ? `<span class="recipes">${{item.recipes}}</span>` : ''}}
+        ${{item.custom ? `<span class="custom-remove" data-id="${{item.id}}">ta bort</span>` : ''}}
       `;
       div.addEventListener('click', (e) => {{
-        if (e.target.tagName === 'INPUT') return;
+        if (e.target.tagName === 'INPUT' || e.target.classList.contains('custom-remove') || e.target.classList.contains('qty') || e.target.classList.contains('qty-input')) return;
         checked[item.id] = !checked[item.id];
         save(); render();
       }});
-      div.querySelector('input').addEventListener('change', () => {{
+      div.querySelector('input[type="checkbox"]').addEventListener('change', () => {{
         checked[item.id] = !checked[item.id];
         save(); render();
       }});
+      const qtyEl = div.querySelector('.qty');
+      if (qtyEl) {{
+        qtyEl.addEventListener('click', (e) => {{
+          e.stopPropagation();
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'qty-input';
+          input.value = displayQty;
+          input.style.width = Math.max(60, displayQty.length * 9 + 20) + 'px';
+          const commit = () => {{
+            const val = input.value.trim();
+            if (val === '' || val === item.qty) {{
+              delete adjustedQty[item.id];
+            }} else {{
+              adjustedQty[item.id] = val;
+            }}
+            saveAdjusted(); render();
+          }};
+          input.addEventListener('blur', commit);
+          input.addEventListener('keydown', (ev) => {{
+            if (ev.key === 'Enter') input.blur();
+            if (ev.key === 'Escape') {{ input.value = item.qty || ''; input.blur(); }}
+          }});
+          qtyEl.replaceWith(input);
+          input.focus();
+          input.select();
+        }});
+      }}
+      const removeBtn = div.querySelector('.custom-remove');
+      if (removeBtn) removeBtn.addEventListener('click', () => removeCustomItem(item.id));
       sectionEl.appendChild(div);
     }}
     list.appendChild(sectionEl);
@@ -457,17 +543,24 @@ function save() {{
 
 function uncheckAll() {{
   checked = {{}};
-  save(); render();
+  adjustedQty = {{}};
+  save(); saveAdjusted(); render();
 }}
 
 async function saveList() {{
+  const allSections = [...DATA];
+  if (customItems.length > 0) {{
+    allSections.push({{ section: 'Övrigt', items: customItems.map(i => ({{ ...i, qty: '', recipes: '' }})) }});
+  }}
+
   const lines = [];
-  for (const section of DATA) {{
+  for (const section of allSections) {{
     const needed = section.items.filter(i => !checked[i.id]);
     if (needed.length === 0) continue;
     lines.push(`## ${{section.section}}`);
     for (const item of needed) {{
-      const qty = item.qty ? ` — ${{item.qty}}` : '';
+      const finalQty = adjustedQty[item.id] !== undefined ? adjustedQty[item.id] : item.qty;
+      const qty = finalQty ? ` — ${{finalQty}}` : '';
       lines.push(`- ${{item.name}}${{qty}}`);
     }}
     lines.push('');
@@ -774,11 +867,16 @@ def ica_push_items(token: str, session_id: str, list_id: str, list_name: str, it
     print(f"\nList: {list_name}")
     print(f"  {len(items)} items to push\n")
 
-    clear = input("Clear list first? [a]ll / [c]hecked / [N]o: ").strip().lower()
-    if clear in ("a", "all"):
-        ica_clear_list(token, session_id, list_id, only_checked=False)
-    elif clear in ("c", "checked"):
-        ica_clear_list(token, session_id, list_id, only_checked=True)
+    lists = ica_get_lists(token, session_id)
+    target = next((l for l in lists if l["id"] == list_id), None)
+    n_existing = len(target.get("rows", [])) if target else 0
+
+    if n_existing > 0:
+        clear = input(f"Clear list first? ({n_existing} existing items) [a]ll / [c]hecked / [N]o: ").strip().lower()
+        if clear in ("a", "all"):
+            ica_clear_list(token, session_id, list_id, only_checked=False)
+        elif clear in ("c", "checked"):
+            ica_clear_list(token, session_id, list_id, only_checked=True)
 
     print(f"\nPushing {len(items)} items:\n")
     ok, fail = 0, 0
