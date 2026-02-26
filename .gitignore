@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .vscode/
 inkopslista.md
+ingredient_cache.json
