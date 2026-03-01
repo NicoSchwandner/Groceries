@@ -1,5 +1,6 @@
 """Weekly grocery workflow: Mela → translate → checklist → ICA."""
 
+import hashlib
 import json
 import os
 import re
@@ -244,11 +245,17 @@ def _best_weight_unit(g: float) -> tuple[float, str]:
     return g, "g"
 
 
-def consolidate(recipes: list[dict], translations: dict) -> list[dict]:
-    """Merge ingredients across recipes, grouping by category."""
-    merged = {}  # swedish_name -> {qty_units, category, recipes}
+def consolidate(recipes, translations):
+    # type: (list[dict], dict) -> tuple[list[str], list[dict]]
+    """Merge ingredients across recipes, grouping by category.
 
-    for recipe in recipes:
+    Returns (recipe_titles, sections) where each item carries per-recipe
+    sources so the JS checklist can apply multipliers dynamically.
+    """
+    recipe_titles = [r["title"] for r in recipes]
+    merged = {}  # swedish_name -> {sources, category}
+
+    for recipe_idx, recipe in enumerate(recipes):
         for ing in recipe["ingredients"]:
             t = translations.get(ing["name"])
             if not t:
@@ -260,13 +267,14 @@ def consolidate(recipes: list[dict], translations: dict) -> list[dict]:
 
             if swedish_name not in merged:
                 merged[swedish_name] = {
-                    "qty_units": [],
+                    "sources": [],
                     "category": t.get("category", "pantry"),
-                    "recipes": set(),
                 }
-            merged[swedish_name]["recipes"].add(recipe["title"])
-            if qty:
-                merged[swedish_name]["qty_units"].append((qty, unit))
+            merged[swedish_name]["sources"].append({
+                "recipeIdx": recipe_idx,
+                "qty": qty,
+                "unit": unit,
+            })
 
     # Build sectioned output
     sections = {}
@@ -276,20 +284,19 @@ def consolidate(recipes: list[dict], translations: dict) -> list[dict]:
         if section_name not in sections:
             sections[section_name] = {"order": order, "items": []}
 
-        qty_display = combine_quantities(data["qty_units"])
         item_id = re.sub(r"[^a-z0-9]", "_", name)
 
         sections[section_name]["items"].append({
             "id": item_id,
             "name": name.capitalize(),
-            "qty": qty_display,
-            "recipes": ", ".join(sorted(data["recipes"])),
+            "sources": data["sources"],
         })
 
-    return [
+    result = [
         {"section": name, "items": sec["items"]}
         for name, sec in sorted(sections.items(), key=lambda x: x[1]["order"])
     ]
+    return recipe_titles, result
 
 
 def combine_quantities(qty_units: list[tuple[str, str]]) -> str:
@@ -338,9 +345,11 @@ def combine_quantities(qty_units: list[tuple[str, str]]) -> str:
 # ---------------------------------------------------------------------------
 # Local server + HTML checklist
 # ---------------------------------------------------------------------------
-def build_html(sections: list[dict], port: int) -> str:
+def build_html(recipe_titles, sections, port):
     """Generate the interactive HTML shopping list."""
+    recipes_json = json.dumps(recipe_titles, ensure_ascii=False)
     data_json = json.dumps(sections, ensure_ascii=False, indent=2)
+    run_id = hashlib.md5(data_json.encode()).hexdigest()[:8]
     save_url = f"http://localhost:{port}/save"
 
     return f"""<!DOCTYPE html>
@@ -360,7 +369,11 @@ def build_html(sections: list[dict], port: int) -> str:
     .item.checked {{ opacity: 0.4; }}
     .item.checked .name {{ text-decoration: line-through; }}
     .item input[type="checkbox"] {{ width: 20px; height: 20px; accent-color: #4caf50; flex-shrink: 0; cursor: pointer; }}
-    .name {{ flex: 1; font-size: 0.95rem; }}
+    .name {{ flex: 1; font-size: 0.95rem; display: flex; align-items: center; gap: 4px; }}
+    .name-edited {{ color: #e65100; font-weight: 600; }}
+    .name-edit {{ color: #ccc; font-size: 0.75rem; cursor: pointer; padding: 2px; }}
+    .name-edit:hover {{ color: #666; }}
+    .name-input {{ flex: 1; padding: 2px 6px; border: 1px solid #4caf50; border-radius: 4px; font-size: 0.95rem; color: #333; outline: none; }}
     .qty {{ color: #666; font-size: 0.85rem; white-space: nowrap; cursor: text; }}
     .qty-input {{ width: 80px; padding: 2px 6px; border: 1px solid #4caf50; border-radius: 4px; font-size: 0.85rem; color: #333; outline: none; text-align: right; }}
     .qty-edited {{ color: #e65100; font-weight: 600; }}
@@ -384,11 +397,23 @@ def build_html(sections: list[dict], port: int) -> str:
     .custom-remove:hover {{ color: #e53935; background: #fce4ec; }}
     .toast {{ position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 24px; border-radius: 8px; display: none; z-index: 10; }}
     .toast.show {{ display: block; }}
+    #recipes {{ margin-bottom: 16px; }}
+    .recipe-row {{ display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: white; border-radius: 8px; margin-bottom: 4px; }}
+    .recipe-name {{ font-size: 0.9rem; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .mult-btns {{ display: flex; gap: 4px; flex-shrink: 0; }}
+    .mult-btn {{ padding: 4px 10px; border: 1px solid #ddd; border-radius: 6px; background: #f5f5f5; font-size: 0.8rem; cursor: pointer; }}
+    .mult-btn.active {{ background: #4caf50; color: white; border-color: #4caf50; }}
+    .mult-btn.active-zero {{ background: #e0e0e0; color: #999; border-color: #ccc; }}
+    .mult-btn:hover:not(.active):not(.active-zero) {{ background: #e8e8e8; }}
+    .staple-btn {{ color: #ccc; font-size: 0.8rem; cursor: pointer; padding: 2px; flex-shrink: 0; }}
+    .staple-btn:hover {{ color: #666; }}
+    .staple-btn.active {{ color: #2196f3; }}
   </style>
 </head>
 <body>
   <h1>Inköpslista</h1>
   <p class="subtitle">Bocka av det du redan har hemma. Resten blir din inköpslista.</p>
+  <div id="recipes"></div>
   <div class="add-bar">
     <input type="text" id="addInput" placeholder="Lägg till vara..." autocomplete="off">
     <button onclick="addCustomItem()">Lägg till</button>
@@ -402,15 +427,159 @@ def build_html(sections: list[dict], port: int) -> str:
   <div class="toast" id="toast"></div>
 
 <script>
+const RECIPES = {recipes_json};
 const DATA = {data_json};
+const RUN_ID = "{run_id}";
 const SAVE_URL = "{save_url}";
 
-let checked = JSON.parse(localStorage.getItem('grocery-checked') || '{{}}');
-let customItems = JSON.parse(localStorage.getItem('grocery-custom') || '[]');
-let adjustedQty = JSON.parse(localStorage.getItem('grocery-adjusted-qty') || '{{}}');
+const VOLUME_TO_ML = {{ml: 1, cl: 10, dl: 100, l: 1000}};
+const WEIGHT_TO_G = {{g: 1, kg: 1000}};
+
+function bestVolumeUnit(ml) {{
+  if (ml >= 1000 && ml % 1000 === 0) return [ml / 1000, 'l'];
+  if (ml >= 100) return [ml / 100, 'dl'];
+  return [ml, 'ml'];
+}}
+
+function bestWeightUnit(g) {{
+  if (g >= 1000) return [g / 1000, 'kg'];
+  return [g, 'g'];
+}}
+
+function fmtNum(v) {{
+  return parseFloat(v.toFixed(2)).toString();
+}}
+
+function combineQuantities(sources, multipliers) {{
+  let totalMl = 0, totalG = 0;
+  const otherTotals = {{}};
+  const unparseable = [];
+
+  for (const s of sources) {{
+    if (!s.qty) continue;
+    const mult = multipliers[s.recipeIdx] || 0;
+    if (mult === 0) continue;
+    const normalized = s.qty.replace(',', '.');
+    const value = parseFloat(normalized);
+    if (isNaN(value)) {{
+      unparseable.push(`${{s.qty}} ${{s.unit}}`.trim());
+      continue;
+    }}
+    const scaled = value * mult;
+    const u = s.unit.toLowerCase();
+    if (u in VOLUME_TO_ML) totalMl += scaled * VOLUME_TO_ML[u];
+    else if (u in WEIGHT_TO_G) totalG += scaled * WEIGHT_TO_G[u];
+    else {{
+      const key = s.unit || '';
+      otherTotals[key] = (otherTotals[key] || 0) + scaled;
+    }}
+  }}
+
+  const parts = [];
+  if (totalMl > 0) {{ const [v, u] = bestVolumeUnit(totalMl); parts.push(`${{fmtNum(v)}} ${{u}}`); }}
+  if (totalG > 0) {{ const [v, u] = bestWeightUnit(totalG); parts.push(`${{fmtNum(v)}} ${{u}}`); }}
+  for (const [unit, total] of Object.entries(otherTotals).sort()) {{
+    parts.push(`${{fmtNum(total)}} ${{unit}}`.trim());
+  }}
+  parts.push(...unparseable);
+  return parts.join(' + ');
+}}
+
+function isItemVisible(item, multipliers) {{
+  return item.sources.some(s => (multipliers[s.recipeIdx] || 0) > 0);
+}}
+
+function getRecipeNames(sources, multipliers) {{
+  const names = [];
+  const seen = new Set();
+  for (const s of sources) {{
+    if ((multipliers[s.recipeIdx] || 0) > 0 && !seen.has(s.recipeIdx)) {{
+      seen.add(s.recipeIdx);
+      names.push(RECIPES[s.recipeIdx]);
+    }}
+  }}
+  return names.sort().join(', ');
+}}
+
+let staples = new Set(JSON.parse(localStorage.getItem('grocery-staples') || '[]'));
+const prevRunId = localStorage.getItem('grocery-run-id');
+const isNewRun = prevRunId !== RUN_ID;
+
+let checked, customItems, adjustedQty, adjustedNames, multipliers;
+if (isNewRun) {{
+  checked = {{}};
+  customItems = [];
+  adjustedQty = {{}};
+  adjustedNames = {{}};
+  multipliers = RECIPES.map(() => 1);
+  // Pre-check staples that exist in current list
+  const allIds = new Set();
+  for (const s of DATA) for (const i of s.items) allIds.add(i.id);
+  for (const id of staples) {{ if (allIds.has(id)) checked[id] = true; }}
+  localStorage.setItem('grocery-run-id', RUN_ID);
+  localStorage.setItem('grocery-checked', JSON.stringify(checked));
+  localStorage.setItem('grocery-custom', JSON.stringify(customItems));
+  localStorage.setItem('grocery-adjusted-qty', JSON.stringify(adjustedQty));
+  localStorage.setItem('grocery-adjusted-names', JSON.stringify(adjustedNames));
+  localStorage.setItem('grocery-multipliers', JSON.stringify(multipliers));
+}} else {{
+  checked = JSON.parse(localStorage.getItem('grocery-checked') || '{{}}');
+  customItems = JSON.parse(localStorage.getItem('grocery-custom') || '[]');
+  adjustedQty = JSON.parse(localStorage.getItem('grocery-adjusted-qty') || '{{}}');
+  adjustedNames = JSON.parse(localStorage.getItem('grocery-adjusted-names') || '{{}}');
+  multipliers = JSON.parse(localStorage.getItem('grocery-multipliers') || 'null');
+  if (!multipliers || multipliers.length !== RECIPES.length) {{
+    multipliers = RECIPES.map(() => 1);
+  }}
+}}
 
 function saveAdjusted() {{
   localStorage.setItem('grocery-adjusted-qty', JSON.stringify(adjustedQty));
+}}
+
+function saveAdjustedNames() {{
+  localStorage.setItem('grocery-adjusted-names', JSON.stringify(adjustedNames));
+}}
+
+function saveStaples() {{
+  localStorage.setItem('grocery-staples', JSON.stringify([...staples]));
+}}
+
+function toggleStaple(id) {{
+  if (staples.has(id)) {{
+    staples.delete(id);
+  }} else {{
+    staples.add(id);
+    checked[id] = true;
+    save();
+  }}
+  saveStaples(); render();
+}}
+
+function saveMultipliers() {{
+  localStorage.setItem('grocery-multipliers', JSON.stringify(multipliers));
+}}
+
+function setMultiplier(idx, value) {{
+  multipliers[idx] = value;
+  saveMultipliers();
+  render();
+}}
+
+function renderRecipes() {{
+  const el = document.getElementById('recipes');
+  el.innerHTML = RECIPES.map((name, idx) => `
+    <div class="recipe-row">
+      <span class="recipe-name">${{name}}</span>
+      <div class="mult-btns">
+        ${{[0, 1, 2, 3].map(m => {{
+          const isActive = multipliers[idx] === m;
+          const cls = isActive ? (m === 0 ? 'mult-btn active-zero' : 'mult-btn active') : 'mult-btn';
+          return `<button class="${{cls}}" onclick="setMultiplier(${{idx}}, ${{m}})">\u00d7${{m}}</button>`;
+        }}).join('')}}
+      </div>
+    </div>
+  `).join('');
 }}
 
 function saveCustom() {{
@@ -450,18 +619,22 @@ function showToast(msg, ms = 2000) {{
 }}
 
 function render() {{
+  renderRecipes();
   const list = document.getElementById('list');
   list.innerHTML = '';
   let totalItems = 0, checkedItems = 0;
 
   const allSections = [...DATA];
   if (customItems.length > 0) {{
-    allSections.push({{ section: 'Övrigt', items: customItems.map(i => ({{ ...i, qty: '', recipes: '', custom: true }})) }});
+    allSections.push({{ section: 'Övrigt', items: customItems.map(i => ({{ ...i, sources: [], custom: true }})) }});
   }}
 
   for (const section of allSections) {{
+    const visibleItems = section.items.filter(i => i.custom || isItemVisible(i, multipliers));
+    if (visibleItems.length === 0) continue;
+
     const sectionEl = document.createElement('div');
-    const allChecked = section.items.every(i => checked[i.id]);
+    const allChecked = visibleItems.every(i => checked[i.id]);
 
     sectionEl.innerHTML = `<div class="section-toggle">
       <h2>${{section.section}}</h2>
@@ -470,27 +643,57 @@ function render() {{
 
     sectionEl.querySelector('.check-all').addEventListener('click', (e) => {{
       e.stopPropagation();
-      const allNowChecked = section.items.every(i => checked[i.id]);
-      section.items.forEach(i => {{ checked[i.id] = !allNowChecked; }});
+      const allNowChecked = visibleItems.every(i => checked[i.id]);
+      visibleItems.forEach(i => {{ checked[i.id] = !allNowChecked; }});
       save(); render();
     }});
 
-    for (const item of section.items) {{
+    for (const item of visibleItems) {{
       totalItems++;
       if (checked[item.id]) checkedItems++;
+      const computedQty = item.custom ? '' : combineQuantities(item.sources, multipliers);
+      const recipeNames = item.custom ? '' : getRecipeNames(item.sources, multipliers);
+      const displayQty = adjustedQty[item.id] !== undefined ? adjustedQty[item.id] : computedQty;
+      const isEdited = adjustedQty[item.id] !== undefined && adjustedQty[item.id] !== computedQty;
+      const displayName = adjustedNames[item.id] || item.name;
+      const nameEdited = adjustedNames[item.id] && adjustedNames[item.id] !== item.name;
       const div = document.createElement('div');
       div.className = 'item' + (checked[item.id] ? ' checked' : '');
-      const displayQty = adjustedQty[item.id] !== undefined ? adjustedQty[item.id] : (item.qty || '');
-      const isEdited = adjustedQty[item.id] !== undefined && adjustedQty[item.id] !== item.qty;
       div.innerHTML = `
         <input type="checkbox" ${{checked[item.id] ? 'checked' : ''}}>
-        <span class="name">${{item.name}}</span>
-        ${{item.qty || adjustedQty[item.id] ? `<span class="qty${{isEdited ? ' qty-edited' : ''}}">${{displayQty}}</span>` : ''}}
-        ${{item.recipes ? `<span class="recipes">${{item.recipes}}</span>` : ''}}
+        <span class="name"><span class="name-text${{nameEdited ? ' name-edited' : ''}}">${{displayName}}</span><span class="name-edit">&#x270E;</span></span>
+        ${{computedQty || adjustedQty[item.id] ? `<span class="qty${{isEdited ? ' qty-edited' : ''}}">${{displayQty}}</span>` : ''}}
+        ${{recipeNames ? `<span class="recipes">${{recipeNames}}</span>` : ''}}
+        ${{!item.custom ? `<span class="staple-btn${{staples.has(item.id) ? ' active' : ''}}" title="${{staples.has(item.id) ? 'Har inte alltid hemma' : 'Har alltid hemma'}}">&#x1F3E0;</span>` : ''}}
         ${{item.custom ? `<span class="custom-remove" data-id="${{item.id}}">ta bort</span>` : ''}}
       `;
+      div.querySelector('.name-edit').addEventListener('click', (e) => {{
+        e.stopPropagation();
+        const nameSpan = div.querySelector('.name');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'name-input';
+        input.value = displayName;
+        const commit = () => {{
+          const val = input.value.trim();
+          if (!val || val === item.name) {{
+            delete adjustedNames[item.id];
+          }} else {{
+            adjustedNames[item.id] = val;
+          }}
+          saveAdjustedNames(); render();
+        }};
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (ev) => {{
+          if (ev.key === 'Enter') input.blur();
+          if (ev.key === 'Escape') {{ input.value = item.name; input.blur(); }}
+        }});
+        nameSpan.replaceWith(input);
+        input.focus();
+        input.select();
+      }});
       div.addEventListener('click', (e) => {{
-        if (e.target.tagName === 'INPUT' || e.target.classList.contains('custom-remove') || e.target.classList.contains('qty') || e.target.classList.contains('qty-input')) return;
+        if (e.target.tagName === 'INPUT' || e.target.classList.contains('custom-remove') || e.target.classList.contains('qty') || e.target.classList.contains('qty-input') || e.target.classList.contains('name-edit') || e.target.classList.contains('staple-btn')) return;
         checked[item.id] = !checked[item.id];
         save(); render();
       }});
@@ -509,7 +712,7 @@ function render() {{
           input.style.width = Math.max(60, displayQty.length * 9 + 20) + 'px';
           const commit = () => {{
             const val = input.value.trim();
-            if (val === '' || val === item.qty) {{
+            if (val === '' || val === computedQty) {{
               delete adjustedQty[item.id];
             }} else {{
               adjustedQty[item.id] = val;
@@ -519,13 +722,15 @@ function render() {{
           input.addEventListener('blur', commit);
           input.addEventListener('keydown', (ev) => {{
             if (ev.key === 'Enter') input.blur();
-            if (ev.key === 'Escape') {{ input.value = item.qty || ''; input.blur(); }}
+            if (ev.key === 'Escape') {{ input.value = computedQty || ''; input.blur(); }}
           }});
           qtyEl.replaceWith(input);
           input.focus();
           input.select();
         }});
       }}
+      const stapleBtn = div.querySelector('.staple-btn');
+      if (stapleBtn) stapleBtn.addEventListener('click', (e) => {{ e.stopPropagation(); toggleStaple(item.id); }});
       const removeBtn = div.querySelector('.custom-remove');
       if (removeBtn) removeBtn.addEventListener('click', () => removeCustomItem(item.id));
       sectionEl.appendChild(div);
@@ -542,26 +747,35 @@ function save() {{
 }}
 
 function uncheckAll() {{
-  checked = {{}};
   adjustedQty = {{}};
-  save(); saveAdjusted(); render();
+  adjustedNames = {{}};
+  multipliers = RECIPES.map(() => 1);
+  // Re-check staple items only
+  checked = {{}};
+  const allIds = new Set();
+  for (const s of DATA) for (const i of s.items) allIds.add(i.id);
+  for (const id of staples) {{ if (allIds.has(id)) checked[id] = true; }}
+  save(); saveAdjusted(); saveAdjustedNames(); saveMultipliers(); render();
 }}
 
 async function saveList() {{
   const allSections = [...DATA];
   if (customItems.length > 0) {{
-    allSections.push({{ section: 'Övrigt', items: customItems.map(i => ({{ ...i, qty: '', recipes: '' }})) }});
+    allSections.push({{ section: 'Övrigt', items: customItems.map(i => ({{ ...i, sources: [], custom: true }})) }});
   }}
 
   const lines = [];
   for (const section of allSections) {{
-    const needed = section.items.filter(i => !checked[i.id]);
+    const visible = section.items.filter(i => i.custom || isItemVisible(i, multipliers));
+    const needed = visible.filter(i => !checked[i.id]);
     if (needed.length === 0) continue;
     lines.push(`## ${{section.section}}`);
     for (const item of needed) {{
-      const finalQty = adjustedQty[item.id] !== undefined ? adjustedQty[item.id] : item.qty;
+      const computedQty = item.custom ? '' : combineQuantities(item.sources, multipliers);
+      const finalQty = adjustedQty[item.id] !== undefined ? adjustedQty[item.id] : computedQty;
+      const finalName = adjustedNames[item.id] || item.name;
       const qty = finalQty ? ` — ${{finalQty}}` : '';
-      lines.push(`- ${{item.name}}${{qty}}`);
+      lines.push(`- ${{finalName}}${{qty}}`);
     }}
     lines.push('');
   }}
@@ -636,10 +850,10 @@ class ChecklistHandler(BaseHTTPRequestHandler):
         pass  # Suppress request logs
 
 
-def serve_checklist(sections: list[dict]):
+def serve_checklist(recipe_titles, sections):
     """Start local server, open browser, wait for user to save."""
     port = 8741
-    html = build_html(sections, port)
+    html = build_html(recipe_titles, sections, port)
     handler = partial(ChecklistHandler, html, SHOPPING_LIST_MD)
     server = HTTPServer(("127.0.0.1", port), handler)
 
@@ -931,12 +1145,12 @@ def main():
     translations = translate_ingredients(all_names, api_key)
 
     # Step 3: Consolidate
-    sections = consolidate(recipes, translations)
+    recipe_titles, sections = consolidate(recipes, translations)
     total_items = sum(len(s["items"]) for s in sections)
     print(f"Consolidated into {total_items} unique items.")
 
     # Step 4: Serve interactive checklist
-    serve_checklist(sections)
+    serve_checklist(recipe_titles, sections)
 
     if not os.path.exists(SHOPPING_LIST_MD):
         print("\nNo list saved. Run 'weekly-shopping' again to retry.")
